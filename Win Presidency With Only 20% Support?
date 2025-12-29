@@ -1,0 +1,268 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include "MinPopVote.h"
+
+int totalEVs(State* states, int szStates) {
+    int totalVotes = 0;
+    // It will loop through each state and sum their electoral votes
+    for (int i =0; i < szStates; i++){
+        totalVotes += states[i].electoralVotes;
+    }
+    return totalVotes;
+}
+
+int totalPVs(State* states, int szStates) {
+    int totalVotes = 0;
+    // It will loop through each state and sum their popular votes
+    for (int i = 0; i < szStates; i++){
+        totalVotes += states[i].popularVotes;
+    }
+    return totalVotes;
+}
+
+bool setSettings(int argc, char** argv, int* year, bool* fastMode, bool* quietMode) {
+    *year = 0; 
+    *quietMode = false; 
+    *fastMode = false; 
+    
+    bool validYear = true;
+    for(int i = 1; i < argc; i++){
+        
+        // Check the current arguments for each
+        if(strcmp(argv[i], "-f") == 0){
+            *fastMode = true; // Enable the fast mode if its present
+        } else if (strcmp(argv[i], "-q") == 0){
+            *quietMode = true; // Enable the quiet mode if its present
+        } else if (strcmp(argv[i], "-y") == 0){
+            // Makesure there's a next argument after the agrument capture the year
+            if(i + 1 < argc){
+                int years = atoi(argv[i + 1]);
+                // Check if its valid
+                if(years >= 1828 && years <= 2020 && years % 4 == 0){
+                    *year = years;
+                } else {
+                    // if it is invalid year
+                    *year = 0;
+                }
+                i++;
+            } else {
+                validYear = false;
+            }
+        } else {
+            validYear = false;
+        }
+    }
+    return validYear;
+}
+
+void inFilename(char* filename, int year) {
+   sprintf(filename, "data/%d.csv", year);
+}
+
+void outFilename(char* filename, int year) {
+    sprintf(filename, "toWin/%d_win.csv", year);
+}
+
+bool parseLine(char* line, State* myState) {
+    // Check if the line or state is NULL
+    if (line == NULL || myState == NULL){
+        return false;
+    }
+    // It will remove newline character if present at the end of the line
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n'){
+        line[len - 1] = '\0';
+    }
+    // Tokenize to get state name
+    char* stateName = strtok(line, ",");
+    if(stateName == NULL){
+        return false;
+    }
+    // Tokenize to postal code
+    char* postalCode = strtok(NULL, ",");
+    if (postalCode == NULL){
+        return false;
+    }
+    // Tokenize to get electoral votes
+    char* electVotes = strtok(NULL, ",");
+    if (electVotes == NULL){
+        return false;
+    }
+    // Tokenize to get popular votes
+    char* popVotes = strtok(NULL, ",");
+    if (popVotes == NULL){
+        return false;
+    }
+    // Copying into the myState
+    strncpy(myState->name, stateName, sizeof(myState->name));
+    strncpy(myState->postalCode, postalCode, sizeof(myState->postalCode));
+    // Converting string to integer and assign to myState
+    myState->electoralVotes = atoi(electVotes);
+    myState->popularVotes = atoi(popVotes);
+
+    return true;
+}
+
+bool readElectionData(char* filename, State* allStates, int* nStates) {
+    *nStates = 0; //required initialization prior to incrementing. 
+    char line[100];
+    FILE* file = fopen(filename, "r");
+    if (!file){
+        return false;
+    }
+    // Read each line from the file by one by one until the end
+    while(fgets(line, sizeof(line), file) != NULL){
+        if(feof(file)){
+            break;
+        }
+        // Parse the line and populate the corresponding state
+        if(parseLine(line, &allStates[*nStates])){
+            // Increment the number of states read
+            (*nStates)++;
+        }
+        if(*nStates >= 51){
+            break;
+        }
+    }
+    fclose(file);
+    return true; 
+}
+
+MinInfo minPopVoteAtLeast(State* states, int szStates, int start, int EVs) {
+    MinInfo res; 
+    res.szSomeStates = 0;
+    res.sufficientEVs = false;
+    res.subsetPVs = 0;
+    //If we have met or exceeded the required electoral votes
+    if (EVs <= 0){
+        res.sufficientEVs = true;
+        return res;
+    } //If we have considered all states but still haven't met the required EVs
+    if (start >= szStates){
+        return res;
+    }
+    // Remove the current state and move to the next
+    MinInfo outState = minPopVoteAtLeast(states, szStates, start + 1, EVs);
+    //Add the current state and move to the next with reduced required EVs
+    MinInfo inState = minPopVoteAtLeast(states, szStates, start + 1, EVs - states[start].electoralVotes);
+    // If including the current state results in sufficient electoral votes
+    if (inState.sufficientEVs){
+        inState.subsetPVs += (states[start].popularVotes/2)+1;
+        inState.someStates[inState.szSomeStates++] = states[start];
+    }
+    if (inState.sufficientEVs && (!outState.sufficientEVs || inState.subsetPVs < outState.subsetPVs)) {
+        return inState;
+    } else {
+        return outState;
+    }
+}
+
+MinInfo minPopVoteToWin(State* states, int szStates) {
+    int totEVs = totalEVs(states,szStates);
+    int reqEVs = totEVs/2 + 1; // required EVs to win election
+    return minPopVoteAtLeast(states, szStates, 0, reqEVs);
+}
+// Created a extra function to initialize and return a MinInfo structure
+MinInfo minInfoSub(){
+    MinInfo res; 
+    res.szSomeStates = 0;
+    res.sufficientEVs = false;
+    res.subsetPVs = 0;
+    // Initialize each state in the someStates array which holds a subset upto 51 states.
+    for (int i = 0; i < 51; i++){
+        strcpy(res.someStates[i].name, "");
+        strcpy(res.someStates[i].postalCode, "");
+        res.someStates[i].electoralVotes = 0;
+        res.someStates[i].popularVotes = 0;
+    }
+    return res;
+}
+
+MinInfo minPopVoteAtLeastFast(State* states, int szStates, int start, int EVs, MinInfo** memo) {
+
+    // Base case: If EVs <= 0, we have enough electoral votes to win.
+    if (EVs <= 0){
+        MinInfo res = minInfoSub();
+        res.sufficientEVs = true;
+        return res;
+    } // Base case: If we have exhausted all states and still require additional electoral votes.
+    if (start == szStates){
+        MinInfo res = minInfoSub();
+        res.sufficientEVs = false;
+        return res;
+    } // Memoizarion Check
+    if (memo[start][EVs].subsetPVs != -1){
+        return memo[start][EVs];
+    }
+    MinInfo outState = minPopVoteAtLeastFast(states, szStates, start + 1, EVs, memo);
+    MinInfo inState = minPopVoteAtLeastFast(states, szStates, start + 1, EVs - states[start].electoralVotes, memo);
+    // If including the current state helps us meet the electoral vote requirement
+    if (inState.sufficientEVs){
+        // add the necessary popular votes for the current states
+        inState.subsetPVs += (states[start].popularVotes/2)+1;
+        inState.someStates[inState.szSomeStates++] = states[start];
+    }
+    // Compare the results from in and out states
+    MinInfo state;
+    if (inState.sufficientEVs && (!outState.sufficientEVs || inState.subsetPVs < outState.subsetPVs)) {
+        state = inState;
+    } else {
+        state = outState;
+    }
+    // It will store the result in the memo table
+    memo[start][EVs] = state;
+    return state;
+}
+
+
+
+MinInfo minPopVoteToWinFast(State* states, int szStates) {
+    int totEVs = totalEVs(states,szStates);
+    int reqEVs = totEVs/2 + 1; // required EVs to win election
+
+    MinInfo** memo = (MinInfo**)malloc((szStates+1)*sizeof(MinInfo*));
+    for (int i = 0; i < szStates+1; ++i) {
+        memo[i] = (MinInfo*)malloc((reqEVs+1)*sizeof(MinInfo));
+        for (int j = 0; j < reqEVs+1; ++j) {
+            memo[i][j].subsetPVs = -1;
+        }
+    }
+    MinInfo res = minPopVoteAtLeastFast(states, szStates, 0, reqEVs, memo);
+    // Free the allocated memory for the memoization table
+    for (int i = 0; i < szStates + 1; i++){
+        free(memo[i]);
+    }
+    free(memo);
+    return res;
+}
+
+bool writeSubsetData(char* filenameW, int totEVs, int totPVs, int wonEVs, MinInfo toWin) {
+    FILE* file = fopen(filenameW, "w");
+    // Checking if the file open succesfully
+    if (file == NULL){
+        return false;
+    }
+    // Sorting them into the alphabatical order
+    for (int i = 0; i < toWin.szSomeStates - 1; i++){
+        for (int j = 0; j < toWin.szSomeStates - i - 1; j++){
+            if (strcmp(toWin.someStates[j].name, toWin.someStates[j + 1].name) > 0){
+                State temp = toWin.someStates[j];
+                toWin.someStates[j] = toWin.someStates[j + 1];
+                toWin.someStates[j + 1] = temp;
+            }
+        }
+    }
+    // Write the total electoral votes, total popular votes, won electoral votes, and subset popular votes to the file
+    fprintf(file, "%d,%d,%d,%d\n", totEVs, totPVs, wonEVs, toWin.subsetPVs);
+    
+    // Write each state's name, postal code, electoral votes, and half of its popular votes plus one (needed to win)
+    for (int i = 0; i < toWin.szSomeStates; i++){
+        State state = toWin.someStates[i];
+        fprintf(file, "%s,%s,%d,%d\n", state.name, state.postalCode, state.electoralVotes, (state.popularVotes/2) + 1);
+    }
+    fclose(file);
+    return true; 
+}
