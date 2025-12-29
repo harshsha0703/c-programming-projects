@@ -1,0 +1,680 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+
+typedef struct Org_struct {
+    char name[20];
+    int* prey; //dynamic array of indices  
+    int numPrey;
+} Org;
+
+void addOrgToWeb(Org** ppWeb, int* pNumOrg, char* newOrgName) {
+
+    // It will add organism to the food web by reallocation space for it. 
+   if(*ppWeb == NULL){
+
+    // It will allocate memory for the first organism if web is empty
+    *ppWeb = (Org*)malloc(sizeof(Org));
+    if(*ppWeb == NULL){
+        printf("Memory allocation failed\n");
+        return; 
+    }
+    // It will copy the new organism's name and initialize its prey.
+    strcpy((*ppWeb)[0].name, newOrgName);
+    (*ppWeb)[0].prey = NULL;
+    (*ppWeb)[0].numPrey = 0;
+    
+   } else {
+    // It will allocate memory for one more organism
+    Org* new_web = (Org*)malloc(sizeof(Org) * (*pNumOrg + 1));
+    if(new_web == NULL){
+        printf("Memory allocation failed\n");
+        return;
+    }
+    // It will add a new organism at the end of the new array. 
+    for (int i = 0; i < *pNumOrg; i++){
+        strcpy(new_web[i].name, (*ppWeb)[i].name);
+        new_web[i].prey = (*ppWeb)[i].prey;
+        new_web[i].numPrey = (*ppWeb)[i].numPrey;
+    }
+    strcpy(new_web[*pNumOrg].name, newOrgName);
+    new_web[*pNumOrg].prey = NULL;
+    new_web[*pNumOrg].numPrey = 0;
+
+    free(*ppWeb);
+    *ppWeb = new_web;
+   }
+    
+   (*pNumOrg)++; 
+}
+
+bool addRelationToWeb(Org* pWeb, int numOrg, int predInd, int preyInd) {
+    if(predInd < 0 || predInd >= numOrg || preyInd < 0 || preyInd >= numOrg){
+        printf("Invalid predator and/or prey index. No relation added to the food web.\n");
+        return false;
+    }
+    // Check if the prey is already present
+    for (int i = 0; i < pWeb[predInd].numPrey; i++){
+        if(pWeb[predInd].prey[i] == preyInd){
+            printf("Duplicate predator/prey relation. No relation added to the food web.\n");
+            return false;
+        }
+    }
+    // If prey array is empty, allocate memory for one prey
+    if(pWeb[predInd].prey == NULL){
+        pWeb[predInd].prey = (int*)malloc(sizeof(int));
+        if(pWeb[predInd].prey == NULL){
+            printf("Memory allocation failed.\n");
+            return false;
+        }
+    } else {
+        // It will allocate memory for an additional prey
+        int* prey_arrayNew = (int*)malloc(sizeof(int) * (pWeb[predInd].numPrey + 1));
+        if (prey_arrayNew == NULL){
+            printf("Memory allocation failed.\n");
+            return false;
+        }
+        // Copy existing prey to the new array
+        for (int i = 0; i < pWeb[predInd].numPrey; i++){
+            prey_arrayNew[i] = pWeb[predInd].prey[i];
+        }
+        free(pWeb[predInd].prey);
+        pWeb[predInd].prey = prey_arrayNew;
+    }
+
+    pWeb[predInd].prey[pWeb[predInd].numPrey] = preyInd;
+    pWeb[predInd].numPrey++;
+    return true;
+}
+
+bool removeOrgFromWeb(Org** ppWeb, int* pNumOrg, int index) {
+    if (index < 0 || index >= *pNumOrg) {
+        printf("Invalid extinction index. No organism removed from the food web.\n");
+        return false;
+    }
+    // Free the prey array of the organism to be removed
+    if ((*ppWeb)[index].prey != NULL) {
+        free((*ppWeb)[index].prey);
+    }
+    // It will free the entire web and set it to NULL, if it's the last organism
+    if (*pNumOrg == 1) {
+        free(*ppWeb);
+        *ppWeb = NULL;
+        *pNumOrg = 0;
+        return true;
+    }
+    // Allocate memory for the new web with one less organism.
+    Org* new_web = (Org*)malloc((*pNumOrg - 1) * sizeof(Org));
+    if (new_web == NULL) {
+        printf("Memory allocation failed.\n");
+        return false;
+    }
+    // It will copy all organisms except the one being removed.
+    int newIndex = 0;
+    for (int i = 0; i < *pNumOrg; i++) {
+        if (i != index) {
+            new_web[newIndex] = (*ppWeb)[i];
+            newIndex++;
+        }
+    }
+    // It will free the old web and update the pointer.
+    free(*ppWeb);
+    *ppWeb = new_web;
+    (*pNumOrg)--;
+    // It will update prey arrays in other organisms
+    for (int i = 0; i < *pNumOrg; i++) {
+        Org* newOrg = &(*ppWeb)[i];
+        int newNumPrey = 0;
+
+        for (int k = 0; k < newOrg->numPrey; k++) {
+            if (newOrg->prey[k] != index) {
+                newNumPrey++;
+            }
+        }
+
+        if (newNumPrey != newOrg->numPrey) {
+            if (newNumPrey > 0) {
+                // It will allocate a new array if needed
+                int* new_prey = (int*)malloc(newNumPrey * sizeof(int));
+                if (new_prey == NULL) {
+                    printf("Memory allocation failed.\n");
+                    return false;
+                }
+                int preyIndex = 0;
+                // copy valid prey to the new array 
+                for (int k = 0; k < newOrg->numPrey; k++) {
+                    if (newOrg->prey[k] != index) {
+                        new_prey[preyIndex++] = newOrg->prey[k] > index ? newOrg->prey[k] - 1 : newOrg->prey[k];
+                    }
+                }
+                free(newOrg->prey);
+                newOrg->prey = new_prey;
+            } else {
+                free(newOrg->prey);
+                newOrg->prey = NULL;
+            }
+            newOrg->numPrey = newNumPrey;
+        } else {
+            for (int k = 0; k < newOrg->numPrey; k++) {
+                if (newOrg->prey[k] > index) {
+                    newOrg->prey[k]--;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
+void freeWeb(Org* pWeb, int numOrg) {
+
+    // TODO (Task 5): free all malloc'd memory associated with pWeb, 
+    //               to prevent potential leaks before program terminates
+    
+
+    // It will free all allocated memory for the food web to prevent leaks.
+    for (int i = 0; i < numOrg; i++){
+        free(pWeb[i].prey);
+    }
+    free(pWeb);
+}
+
+void printWeb(Org* pWeb, int numOrg) {
+    // It will print food web, showing each organism
+    if(pWeb == NULL || numOrg == 0){
+        printf("No organisms in the web.\n");
+        return;
+    }
+    
+    for (int i_name =0; i_name < numOrg; i_name++){
+        printf("  (%d) %s", i_name, pWeb[i_name].name);
+        if(pWeb[i_name].numPrey > 0 && pWeb[i_name].prey != NULL){
+            printf(" eats ");
+            for(int j_name = 0; j_name < pWeb[i_name].numPrey; j_name++){
+                if(j_name > 0){
+                    printf(", ");
+                }
+                printf("%s", pWeb[pWeb[i_name].prey[j_name]].name);
+            }
+        }
+        printf("\n");
+    }
+}
+
+void apex_predators(Org* pWeb, int numOrg){
+    // It will find and print all apex predators (organisms with no predators).
+
+    bool* organism = (bool*)calloc(numOrg, sizeof(bool));
+    if(organism == NULL){
+        printf("Memory allocation failed.\n");
+        return;
+    }
+    for(int i = 0; i < numOrg; i++){
+        for(int k = 0; k < pWeb[i].numPrey; k++){
+            int index = pWeb[i].prey[k];
+            if(index >= 0 && index < numOrg){
+                organism[index] = true;
+            }
+        }
+    }
+    for (int i = 0; i < numOrg; i++){
+        if(!organism[i]){
+            printf(" %s\n", pWeb[i].name);
+        }
+    }
+    free(organism);
+}
+void find_producers(Org* pWeb, int numOrg){
+    // It will Find and print all producers (organisms with no prey)
+    for (int i_prod = 0; i_prod < numOrg; i_prod++){
+        if(pWeb[i_prod].numPrey == 0){
+             // If the organism has no prey, it's a producer
+            printf(" %s\n", pWeb[i_prod].name);
+        }
+    }
+}
+void most_flexibleEater(Org* pWeb, int numOrg){
+    // It will Find and print the organism(s) with the highest number of prey
+    if(numOrg == 0){
+        return;
+    }
+
+    int highest_prey = pWeb[0].numPrey;
+    // It will Check each organism to find the one with the highest number of prey
+    for(int i = 0; i < numOrg; i++){
+        if (pWeb[i].numPrey > highest_prey){
+            highest_prey = pWeb[i].numPrey;
+        }
+    }
+    // It will Print all organisms that have the highest prey count
+    for (int j = 0; j < numOrg; j++){
+        if (pWeb[j].numPrey == highest_prey && highest_prey > 0){
+            printf(" %s\n", pWeb[j].name);
+        }
+    }
+}
+void tastiest_food(Org* pWeb, int numOrg){
+    // It will Determine the most 'eaten' prey
+    if (numOrg == 0){
+        return;
+    }
+    int* count_prey = (int*)calloc(numOrg, sizeof(int));
+    if (count_prey == NULL){
+        printf("Memory allocation failed.\n");
+        return;
+    }
+    // It will loop through each organism's prey and count how often each organism is preyed upon
+    for(int i = 0; i < numOrg; i++){
+        for(int k = 0; k < pWeb[i].numPrey; k++){
+            int index = pWeb[i].prey[k];
+            if (index >= 0 && index < numOrg){
+                count_prey[index]++;
+            }
+        }
+    }
+    int highest_count = count_prey[0];
+    for (int i = 1; i < numOrg; i++){
+        if (count_prey[i] > highest_count){
+            highest_count = count_prey[i];
+        }
+    }
+    for (int j = 0; j < numOrg; j++){
+        if (count_prey[j] == highest_count && highest_count > 0){
+            printf(" %s\n", pWeb[j].name);
+        }
+    }
+    free(count_prey);
+}
+void foodWeb_Heights(Org* pWeb, int numOrg){
+    // It will Calculate the height of each organism in the food web based on its prey
+    if (numOrg == 0){
+        return; 
+    }
+    int* get_height = (int*)malloc(sizeof(int) * numOrg);
+    if (get_height == NULL){
+        printf("Memory allocation failed.\n");
+        return;
+    }
+    for (int i = 0; i < numOrg; i++){
+        get_height[i] = -1;
+    }
+    // It will Repeatedly process each organism until all heights are stable
+    bool helper = true; 
+    while (helper){
+        helper = false;
+        for (int i = 0; i < numOrg; i++){
+            if (pWeb[i].numPrey == 0){
+                if (get_height[i] != 0){
+                    get_height[i] = 0;
+                    helper = true;
+                }
+            } else {
+                // It will Calculate height based on the maximum height of its prey
+                int max_height = -1;
+                bool prey = true;
+                for (int j = 0; j < pWeb[i].numPrey; j++){
+                    int index = pWeb[i].prey[j];
+                    if (index < 0 || index >= numOrg){
+                        continue;
+                    }
+                    if(get_height[index] > max_height){
+                        max_height = get_height[index];
+                    }
+                }
+                // It will Update the height of the organism
+                if(prey){
+                    int new_height = max_height + 1;
+                    if (get_height[i] != new_height){
+                        get_height[i] = new_height;
+                        helper = true;
+                    }
+                }
+            }
+        }
+    }
+    for (int i = 0; i < numOrg; i++){
+        printf("  %s: %d\n", pWeb[i].name, get_height[i]);
+    }
+    free(get_height);
+}
+void voreTypes(Org* pWeb, int numOrg){
+    bool* find_producers = (bool*)calloc(numOrg, sizeof(bool));
+    if (find_producers == NULL){
+        printf("Memory allocation failed.\n");
+        return;
+    }
+    // It will Identify producers (no prey)
+    for (int i = 0; i < numOrg; i++){
+        if(pWeb[i].numPrey == 0){
+            find_producers[i] = true;
+        }
+    } 
+    printf("  Producers:\n");
+    for (int j = 0; j < numOrg; j++){
+        if (find_producers[j]){
+            printf("    %s\n", pWeb[j].name);
+        }
+    }
+    printf("  Herbivores:\n");
+    for (int i = 0; i < numOrg; i++){
+        if (pWeb[i].numPrey > 0){
+            bool herb_prod = true;
+            for (int k = 0; k < pWeb[i].numPrey; k++){
+                int index = pWeb[i].prey[k];
+                if (index < 0 || index >= numOrg){
+                    continue;
+                }
+                if (!find_producers[index]){
+                    herb_prod = false;
+                    break;
+                }
+            }
+            if (herb_prod){
+                printf("    %s\n", pWeb[i].name);
+            }
+        }
+    }
+    printf("  Omnivores:\n");
+    for(int i = 0; i < numOrg; i++){
+        if (pWeb[i].numPrey > 0){
+            bool producer = false; 
+            bool not_producer = false;
+            for (int k = 0; k < pWeb[i].numPrey; k++){
+                int index = pWeb[i].prey[k];
+                if (index < 0 || index >= numOrg){
+                    continue; 
+                } 
+                if (find_producers[index]){
+                    producer = true;
+                } else {
+                    not_producer = true;
+                }
+                if (producer && not_producer){
+                    break;
+                }
+            }
+            if (producer && not_producer){
+                printf("    %s\n", pWeb[i].name);
+            }    
+        }
+    }
+    printf("  Carnivores:\n");
+    for(int j = 0; j < numOrg; j++){
+        if (pWeb[j].numPrey > 0){
+            bool non_producer = true;
+            for(int k = 0; k < pWeb[j].numPrey; k++){
+                int index = pWeb[j].prey[k];
+                if (index < 0 || index >= numOrg){
+                    continue;
+                }
+                if (find_producers[index]){
+                    non_producer = false;
+                    break;
+                }
+            }
+            if (non_producer){
+                printf("    %s\n", pWeb[j].name);
+            }
+        }
+    }
+    free(find_producers);
+}
+
+
+void displayAll(Org* pWeb, int numOrg, bool modified) {
+
+    if (modified) printf("UPDATED ");
+    printf("Food Web Predators & Prey:\n");
+    printWeb(pWeb,numOrg); 
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Apex Predators:\n");
+    apex_predators(pWeb,numOrg);
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Producers:\n");
+    find_producers(pWeb,numOrg);
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Most Flexible Eaters:\n");
+    most_flexibleEater(pWeb,numOrg);
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Tastiest Food:\n");
+    tastiest_food(pWeb, numOrg);
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Food Web Heights:\n");
+    foodWeb_Heights(pWeb, numOrg);
+    printf("\n");
+
+    if (modified) printf("UPDATED ");
+    printf("Vore Types:\n");
+    voreTypes(pWeb, numOrg);
+    printf("\n");
+
+}
+
+bool setModes(int argc, char* argv[], bool* pBasicMode, bool* pDebugMode, bool* pQuietMode) {
+    // Starting from the index 1, it will loop through the
+    for (int i = 1; i < argc; i++){
+        char* argmt = argv[i];
+
+        if(strncmp(argmt, "-b", 2) == 0){
+            if(*pBasicMode){
+                return false;
+            }
+            *pBasicMode = true;
+        }
+        else if (strncmp(argmt, "-d", 2) == 0){
+            if (*pDebugMode){
+                return false;
+            }
+            *pDebugMode = true;
+        } 
+        else if (strncmp(argmt, "-q", 2) == 0){
+            if (*pQuietMode){
+                return false;
+            }
+            *pQuietMode = true;
+        }
+        else {
+            return false;
+        }
+    }
+    return true; 
+}
+
+void printONorOFF(bool mode) {
+    if (mode) {
+        printf("ON\n");
+    } else {
+        printf("OFF\n");
+    }
+}
+
+
+int main(int argc, char* argv[]) {  
+    // It will initialize mode flags to control program behavior
+    bool basicMode = false;
+    bool debugMode = false;
+    bool quietMode = false;
+
+    if (!setModes(argc, argv, &basicMode, &debugMode, &quietMode)) {
+        printf("Invalid command-line argument. Terminating program...\n");
+        return 1;
+    }
+
+    printf("Program Settings:\n");
+    printf("  basic mode = ");
+    printONorOFF(basicMode);
+    printf("  debug mode = ");
+    printONorOFF(debugMode);
+    printf("  quiet mode = ");
+    printONorOFF(quietMode);
+    printf("\n");
+
+    // It will initialize the number of organism to 0
+    int numOrgs = 0;
+    printf("Welcome to the Food Web Application\n\n");
+    printf("--------------------------------\n\n");
+
+    Org* pWeb = NULL;
+
+    printf("Building the initial food web...\n");
+    
+    // It will prompt user to enter oragnism names unless in quiet mode
+    if (!quietMode) printf("Enter the name for an organism in the web (or enter DONE): ");
+    char tempName[20] = "";
+    scanf("%s",tempName); 
+    if (!quietMode) printf("\n");
+
+    // It will continue adding organism until user enters Done.
+    while (strcmp(tempName,"DONE") != 0) {
+        addOrgToWeb(&pWeb,&numOrgs,tempName);
+        if (debugMode) {
+            printf("DEBUG MODE - added an organism:\n");
+            printWeb(pWeb,numOrgs);
+            printf("\n");
+        }
+        if (!quietMode) printf("Enter the name for an organism in the web (or enter DONE): ");
+        scanf("%s",tempName); 
+        if (!quietMode) printf("\n");
+    }
+    if (!quietMode) printf("\n");
+
+    // It will ask user to enter predator/prey relationships
+    if (!quietMode) printf("Enter the pair of indices for a predator/prey relation.\n");
+    if (!quietMode) printf("Enter any invalid index when done (-1 2, 0 -9, 3 3, etc.).\n");
+    if (!quietMode) printf("The format is <predator index> <prey index>: ");
+        
+    int predInd, preyInd;
+    scanf("%d %d",&predInd, &preyInd);
+    if (!quietMode) printf("\n");
+
+    while (predInd >= 0 && preyInd >= 0 && predInd < numOrgs &&  preyInd < numOrgs && predInd != preyInd) {
+        addRelationToWeb(pWeb,numOrgs,predInd,preyInd);
+        if (debugMode) {
+            printf("DEBUG MODE - added a relation:\n");
+            // It will the current state of the web
+            printWeb(pWeb,numOrgs);
+            printf("\n");
+        }
+        if (!quietMode) printf("Enter the pair of indices for a predator/prey relation.\n");
+        if (!quietMode) printf("Enter any invalid index when done (-1 2, 0 -9, 3 3, etc.).\n");
+        if (!quietMode) printf("The format is <predator index> <prey index>: ");
+        
+        scanf("%d %d",&predInd, &preyInd);  
+        if (!quietMode) printf("\n");
+    }
+    printf("\n");
+
+    printf("--------------------------------\n\n");
+    printf("Initial food web complete.\n");
+    printf("Displaying characteristics for the initial food web...\n");
+    
+    displayAll(pWeb,numOrgs,false);
+
+    // It will allow the user to modify the food web if not in basic mode
+    if (!basicMode) {
+        printf("--------------------------------\n\n");
+        printf("Modifying the food web...\n\n");
+        char opt = '?';
+
+        // loops until the user quits
+        while (opt != 'q') {
+            if (!quietMode) {
+                printf("Web modification options:\n");
+                printf("   o = add a new organism (expansion)\n");
+                printf("   r = add a new predator/prey relation (supplementation)\n");
+                printf("   x = remove an organism (extinction)\n");
+                printf("   p = print the updated food web\n");
+                printf("   d = display ALL characteristics for the updated food web\n");
+                printf("   q = quit\n");
+                printf("Enter a character (o, r, x, p, d, or q): ");
+            }
+            scanf(" %c", &opt);
+            if (!quietMode) printf("\n\n");
+
+            // It will give the user option to add a new organism
+            if (opt == 'o') {
+                char newName[20];
+                if (!quietMode) printf("EXPANSION - enter the name for the new organism: ");
+                scanf("%s",newName);
+                if (!quietMode) printf("\n");
+                printf("Species Expansion: %s\n", newName);
+                addOrgToWeb(&pWeb,&numOrgs,newName);
+                printf("\n");
+            
+                if (debugMode) {
+                    printf("DEBUG MODE - added an organism:\n");
+                    printWeb(pWeb,numOrgs);
+                    printf("\n");
+                }
+            // It will give the user option to remove a new organism
+            } else if (opt == 'x') {
+                int extInd;
+                if (!quietMode) printf("EXTINCTION - enter the index for the extinct organism: ");
+                scanf("%d",&extInd);
+                if (!quietMode) printf("\n");
+                if (extInd >= 0 && extInd < numOrgs) {
+                    printf("Species Extinction: %s\n", pWeb[extInd].name);
+                    removeOrgFromWeb(&pWeb,&numOrgs,extInd);
+                } else {
+                    printf("Invalid index for species extinction\n");
+                }
+                printf("\n");
+                
+                if (debugMode) {
+                    printf("DEBUG MODE - removed an organism:\n");
+                    printWeb(pWeb,numOrgs);
+                    printf("\n");
+                }
+
+            // helps user to add a predator/prey
+            } else if (opt == 'r') {
+                if (!quietMode) printf("SUPPLEMENTATION - enter the pair of indices for the new predator/prey relation.\n");
+                if (!quietMode) printf("The format is <predator index> <prey index>: ");
+                scanf("%d %d",&predInd, &preyInd);
+                if (!quietMode) printf("\n");
+
+                if (addRelationToWeb(pWeb,numOrgs,predInd,preyInd)) {
+                    printf("New Food Source: %s eats %s\n", pWeb[predInd].name, pWeb[preyInd].name);
+                };
+                printf("\n");
+                if (debugMode) {
+                    printf("DEBUG MODE - added a relation:\n");
+                    printWeb(pWeb,numOrgs);
+                    printf("\n");
+                }
+
+            } else if (opt == 'p') {
+                printf("UPDATED Food Web Predators & Prey:\n");
+                printWeb(pWeb,numOrgs);
+                printf("\n");
+                
+            } else if (opt == 'd') {
+                printf("Displaying characteristics for the UPDATED food web...\n\n");
+                displayAll(pWeb,numOrgs,true);
+
+            }
+            printf("--------------------------------\n\n");
+        
+        }
+        
+    }
+    // It will free the dynamically allocated memory
+    freeWeb(pWeb,numOrgs);
+
+    //printf("\n\n");
+
+    return 0;
+}
