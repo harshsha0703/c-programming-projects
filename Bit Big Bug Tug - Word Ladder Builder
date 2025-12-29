@@ -1,0 +1,387 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+
+int strCmpCnt(char* word1, char* word2) {
+    // character differences
+    int char_diff = 0;
+    while (*word1 != '\0' || *word2 != '\0'){
+        // It will increment the differences if characters are different
+        if (*word1 != *word2){
+            char_diff++;
+        }
+        // It will increment pointers to check next characters
+        if (*word1 != '\0'){
+            word1++;
+        }
+        if (*word2 != '\0'){
+            word2++;
+        }
+    }
+    return char_diff; //modify this
+}
+
+
+int strCmpInd(char* word1, char* word2) {
+    // index of the character
+    int charIndex = 0;
+    // It will loop through both strings until the difference is found
+    while (*word1 != '\0' && *word2 != '\0'){
+        if (*word1 != *word2){
+            return charIndex;
+        }
+        word1++;
+        word2++;
+        charIndex++;
+    }
+    // 
+    if(*word1 != *word2){
+        return charIndex;
+    }
+    // When the strings are identical
+    return -1; //modify this
+}
+
+
+void appendWord(char*** pWords, int* pNumWords, int* pMaxWords, char* newWord) {
+    // It will check if we need to move more space for word list
+    if(*pNumWords >= *pMaxWords){
+        *pMaxWords *= 2;
+        // move the pWords array with the new capacity
+        char** temp = realloc(*pWords, (*pMaxWords) * sizeof(char*));
+        if(temp == NULL){
+            fprintf(stderr, "Memory reallocation failed\n");
+            exit(1);
+        }
+        *pWords = temp;
+    }
+    // move memory for the new word and copy the characters
+    (*pWords)[*pNumWords] = (char*)malloc((strlen(newWord) + 1) * sizeof(char));
+    if ((*pWords)[*pNumWords] == NULL){
+        fprintf(stderr, "Memory reallocation for new word failed\n");
+        exit(1);
+    }
+    // It will copy the new word to the newly allocated space
+    strcpy((*pWords)[*pNumWords], newWord);
+    (*pNumWords)++;
+}
+
+
+int linSearchForWord(char** words, int numWords, char* findWord) { 
+    for(int i = 0; i  < numWords; i++){
+        // Compare the current word with find word. 
+        if(strcmp(words[i], findWord) == 0){
+            return i;
+        }
+    }
+    return -99; // modify this
+}
+
+
+bool checkForValidWord(char** words, int numWords, int wordLen, char** ladder, int ladderHeight, char* aWord) {
+    // It will check if the user wants to stop
+    if(strcmp(aWord, "DONE") == 0){
+        printf("Stopping with an incomplete word ladder...\n");
+        return true;
+    }
+    // It will check if the word has the correct length
+    if (strlen(aWord) != wordLen){
+        printf("Entered word does NOT have the correct length. Try again...\n");
+        return false;
+    }
+    // It will check if the word is in dictionary
+    int index = linSearchForWord(words, numWords, aWord);
+    if (index == -99){
+        printf("Entered word NOT in dictionary. Try again...\n");
+        return false;
+    }
+    char* lastWord = ladder[ladderHeight - 1];
+    if(strCmpCnt(lastWord, aWord) != 1){
+        printf("Entered word is NOT a one-character change from the previous word. Try again...\n");
+        return false;
+    }
+    printf("Entered word is valid and will be added to the word ladder.\n");
+    return true; // modify this
+}
+
+
+bool isLadderComplete(char** ladderWords, int height, char* finalWord) {
+    if(strcmp(ladderWords[height - 1], finalWord) == 0){
+        return true;
+    }
+    return false; // modify this
+}
+
+
+void displayIncompleteLadder(char** ladderWords, int height) {
+    // It will display three lines of ... to prove that the ladder is incomplete 
+    printf("  ...\n");
+    printf("  ...\n");
+    printf("  ...\n");
+    for(int i = (height - 1); i >= 0; i--){
+        printf("  %s\n", ladderWords[i]);
+    }
+
+}
+
+
+void displayCompleteLadder(char** ladderWords, int height) {
+    // It will start from the top from the bottom
+    for(int i = (height - 1); i > 0; i--){
+    
+        int length = strlen(ladderWords[i]);
+        printf("  %s\n", ladderWords[i]);
+        int index = strCmpInd(ladderWords[i], ladderWords[i - 1]);
+        // Print the caret line with the right indentation
+        printf("  ");
+        
+        for(int j = 0; j < index; j++){
+            printf(" ");
+        }
+        printf("^");
+        int spaces = length - (index + 1);
+        // print the right amount of spaces for after "^" if needed. 
+        for(int k = 0; k < spaces; k++){
+            printf(" ");
+        }
+        printf("\n");
+    }
+    printf("  %s\n", ladderWords[0]);
+
+}
+
+
+int main(int argc, char* argv[]) {
+
+    printf("\nProcessing command-line arguments...\n");
+
+    int wordLen = 0;
+    int maxLadder = 1;
+    char dict[100] = "notAfile";     
+    char startWord[30] = "notAword";
+    char finalWord[30] = "notValid"; 
+    for(int i = 0; i < argc; i++){
+        // It will check the next argument for word length
+        if(strcmp(argv[i], "-n") == 0 && i + 1 < argc){
+            wordLen = atoi(argv[++i]);
+            if (wordLen < 2 || wordLen > 20){
+                wordLen = 0;
+            }
+        } // It will check the next argument for max ladder height
+        else if (strcmp(argv[i], "-m") == 0 && i + 1 < argc){
+            maxLadder = atoi(argv[++i]);
+            if(maxLadder < 2){
+                maxLadder = 0; 
+            }
+        } // It will check the next argument for dictionary file
+        else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc){
+            strcpy(dict, argv[++i]);
+            FILE* file = fopen(dict, "r");
+            if (file == NULL){
+                dict[0] = "\0";
+            } else {
+                fclose(file);
+            }
+        } // It will check the next argument for start word 
+        else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc){
+            strcpy(startWord, argv[++i]);
+        } // It will check the next argument for final word
+        else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc){
+            strcpy(finalWord, argv[++i]);
+        }
+    }
+
+    printf("Interactively (re)setting invalid parameters:\n");
+
+    // set word length using interactive user-input if necessary
+    int numInputs = 1;
+    while (numInputs > 0 && (wordLen < 2 || wordLen > 20)) {
+        printf("Invalid word length = %d\n", wordLen);
+        printf("Enter a valid word length (must be 2-20): ");
+        numInputs = scanf("%d",&wordLen);
+        printf("\n");
+    }
+    if (numInputs == 0) {
+        printf("Invalid input. Cannot set program parameters. Terminating program...\n");
+        return 0;
+    }
+
+
+    // set max ladder height using interactive user-input if necessary
+    numInputs = 1;
+    while (numInputs > 0 && maxLadder < 2) {
+        printf("Invalid max ladder height = %d\n", maxLadder);
+        printf("Enter a valid max ladder height (must be >1): ");
+        numInputs = scanf("%d",&maxLadder);
+        printf("\n");
+    }
+    if (numInputs == 0) {
+        printf("Invalid input. Cannot set program parameters. Terminating program...\n");
+        return 0;
+    }
+
+    // interactive user-input sets the dictionary file;
+    //  check that file exists; if not, user enters another file
+    FILE* fileTry = fopen(dict,"r");
+    numInputs = 1;
+    while (numInputs > 0 && fileTry == NULL) {
+        printf("Dictionary file %s not found...\n", dict);
+        printf("Enter filename for dictionary: ");
+        numInputs = scanf("%s", dict);
+        printf("\n");
+        fileTry = fopen(dict,"r");
+    }
+    fclose(fileTry);
+    if (numInputs == 0) {
+        printf("Invalid input. Cannot set program parameters. Terminating program...\n");
+        return 0;
+    }
+    
+    // build the [words] array, a heap-allocated array of C-strings
+    // where the words are a read-in from the dictionary file
+    // and only those words of the desired length [wordLen] 
+
+    int numWords = 0; // initially, no words in the array
+    int maxWords = 4; // initially, capacity = 4
+
+    char** words = (char**)malloc(maxWords*sizeof(char*));
+    FILE *dictFile = fopen(dict, "r");
+    if (dictFile == NULL){
+        fprintf(stderr, "Failed to open the dictionary file!\n");
+        return 1; 
+    }
+    char buff[100];
+    // It will read the words from the file and store words
+    while(fscanf(dictFile, "%s", buff) == 1){
+        if(strlen(buff) == wordLen){
+            //Move memory for the word and copy it from buff
+            char* word_list = (char*)malloc((wordLen + 1) * sizeof(char));
+            strncpy(word_list, buff, wordLen + 1);
+            // It will append the word to the array
+            appendWord(&words, &numWords, &maxWords, buff);
+            free(word_list);
+        }
+    }
+    fclose(dictFile);
+    
+
+    printf("The dictionary contains %d words of length %d.\n",numWords,wordLen);
+    printf("Max size of the dynamic words array is %d.\n",maxWords);
+    printf("\n");
+
+    // end program if file does not have at least two words of desired length
+    if (numWords < 2) {
+        printf("Dictionary %s contains insufficient %d-letter words...\n",dict,wordLen);
+        printf("Terminating program...\n");
+        return -1;
+    }
+
+    // resetting start word using interactive user-input if necessary
+    numInputs = 1;
+    while (numInputs > 0 && linSearchForWord(words,numWords,startWord) < 0) {
+        printf("Start word %s is not valid...\n", startWord);
+        printf("Enter a valid start word: ");
+        numInputs = scanf("%s", startWord);
+        printf("\n");
+    }
+    if (numInputs == 0) {
+        printf("Invalid input. Cannot set program parameters. Terminating program...\n");
+        return 0;
+    }
+
+    // resetting final word using interactive user-input if necessary
+    numInputs = 1;
+    while (numInputs > 0 && linSearchForWord(words,numWords,finalWord) < 0 ) {
+        printf("Final word %s is not valid...\n", finalWord);
+        printf("Enter a valid final word: ");
+        numInputs = scanf("%s", finalWord);
+        printf("\n");
+    }
+    if (numInputs == 0) {
+        printf("Invalid input. Cannot set program parameters. Terminating program...\n");
+        return 0;
+    }
+
+
+    printf("\nWelcome to the CS 211 Word Ladder Builder!\n");
+    printf("\n"); 
+
+    printf("Your goal is to make a word ladder between two ");
+    printf("%d-letter words: \n  %s -> %s\n\n",wordLen, startWord,finalWord);  
+    
+    // Allocating the word ladder for the maximum allowed height
+    char** ladder = (char**)malloc(maxLadder*sizeof(char*));
+
+    int ladderHeight = 0; // initially, the ladder is empty
+    
+    // add the start word to the ladder, i.e. the "bottom rung"
+    appendWord(&ladder,&ladderHeight,&maxLadder,startWord);
+    
+    char aWord[30] = "XYZ";
+    printf("\n");
+
+    // Let the user build a word ladder interactively & iteratively.
+    // First, check that ladder is not too long AND not complete.
+  
+    while (ladderHeight < maxLadder && strcmp(aWord, "DONE") != 0 && !isLadderComplete(ladder, ladderHeight, finalWord)) {   // modify this line 
+        printf("The goal is to reach the final word: %s\n",finalWord);
+        printf("The ladder is currently: \n");
+        displayIncompleteLadder(ladder,ladderHeight);
+        printf("Current ladder height: %d\n",ladderHeight);
+        printf("Maximum ladder height: %d\n",maxLadder);
+        printf("Enter the next word (or DONE to stop): ");
+        scanf("%s",aWord);
+        printf("\n");
+
+        // Make sure the entered word is valid for the next ladder rung;
+        // if not, repeatedly allow user to enter another word until one is valid
+        while (!checkForValidWord(words, numWords, wordLen, ladder, ladderHeight, aWord)) {
+            printf("Enter another word (or DONE to stop): ");
+            scanf("%s",aWord);
+            printf("\n");
+        }
+
+        // add the entered word to the ladder (unless it is "DONE")
+        if (strcmp(aWord,"DONE") != 0) {
+            appendWord(&ladder,&ladderHeight,&maxLadder,aWord);
+        }
+        printf("\n");
+
+    }
+    
+    // Check if the built word ladder is complete and 
+    // display the word ladder appropriately. 
+    if (isLadderComplete(ladder, ladderHeight, finalWord)) {
+        printf("Word Ladder complete!\n");
+        displayCompleteLadder(ladder,ladderHeight);
+        printf("Word Ladder height = %d. \n", ladderHeight);
+        printf("Can you find a shorter Word Ladder next time??? \n");
+    } else {
+        if (ladderHeight == maxLadder) printf("The Word Ladder reached the maximum height.\n");
+        printf("The final Word Ladder is incomplete:\n");
+        displayIncompleteLadder(ladder,ladderHeight);
+        printf("Word Ladder height = %d. \n", ladderHeight);
+        printf("Can you complete the Word Ladder next time??? \n");
+    }
+    
+   if (words != NULL) {
+        for (int i = 0; i < numWords; i++) {
+            // It will free memory allocated for each indiviual word
+            free(words[i]);
+        }
+        // It will free the memory allocated for the words array itself
+    free(words); 
+    }
+
+    if (ladder != NULL) {
+        for (int i = 0; i < ladderHeight; i++) {
+            // It will free memory allocated for each row of the ladder. 
+            free(ladder[i]); 
+        }    
+        // It will free the memory allocated for the ladders array itself
+    free(ladder);
+    }
+    return 0;
+}
